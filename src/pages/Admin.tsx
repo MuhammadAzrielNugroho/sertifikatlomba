@@ -163,7 +163,7 @@ const IssueForm = ({ onIssued }: { onIssued: (id: string) => void }) => {
     }
     setLoading(true);
     try {
-      const rec = await issueCertificate(parsed.data);
+      const rec = await issueCertificate(parsed.data as Required<typeof parsed.data>);
       setResult(rec);
       toast.success("Sertifikat terbit & tercatat di blockchain", {
         description: `ID: ${rec.id}`,
