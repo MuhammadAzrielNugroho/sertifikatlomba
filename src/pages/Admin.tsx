@@ -327,7 +327,9 @@ const Field = ({ label, value, mono, highlight }: { label: string; value: string
 
 const LedgerTable = () => {
   const [records, setRecords] = useState<BlockchainRecord[]>([]);
-  useEffect(() => setRecords(getLedger().slice().reverse()), []);
+  useEffect(() => {
+    (async () => setRecords((await getLedger()).slice().reverse()))();
+  }, []);
 
   return (
     <Card className="glass-card p-6 md:p-8">
