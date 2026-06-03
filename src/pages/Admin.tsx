@@ -149,7 +149,16 @@ const Admin = () => {
 const IssueForm = ({ onIssued }: { onIssued: (id: string) => void }) => {
   const [form, setForm] = useState({ name: "", competition: "", rank: "", date: "", issuer: "" });
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<BlockchainRecord | null>(null);
+  const [history, setHistory] = useState<BlockchainRecord[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const all = getLedger().slice().reverse();
+    setHistory(all);
+    if (all.length > 0) setSelectedId(all[0].id);
+  }, []);
+
+  const result = history.find((r) => r.id === selectedId) || null;
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [k]: e.target.value });
@@ -164,7 +173,10 @@ const IssueForm = ({ onIssued }: { onIssued: (id: string) => void }) => {
     setLoading(true);
     try {
       const rec = await issueCertificate(parsed.data as Required<typeof parsed.data>);
-      setResult(rec);
+      setHistory((prev) =>
+        prev.some((p) => p.id === rec.id) ? prev : [rec, ...prev]
+      );
+      setSelectedId(rec.id);
       toast.success("Sertifikat terbit & tercatat di blockchain", {
         description: `ID: ${rec.id}`,
       });
