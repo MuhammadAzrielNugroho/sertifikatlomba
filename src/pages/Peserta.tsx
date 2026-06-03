@@ -32,11 +32,15 @@ const Peserta = () => {
       return;
     }
     setSearched(true);
-    const r = getCertificateById(target);
+    const r = await getCertificateById(target);
     if (!r) {
       setRecord(null);
       setQr("");
       toast.error("Sertifikat tidak ditemukan");
+      return;
+    }
+    setRecord(r);
+    setParams({ id: r.id });
       return;
     }
     setRecord(r);
