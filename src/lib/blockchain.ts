@@ -1,5 +1,8 @@
-// Mock blockchain ledger menggunakan localStorage
-// Mensimulasikan smart contract penyimpanan hash sertifikat
+// Shared blockchain-like ledger backed by Lovable Cloud (database).
+// All devices read/write to the SAME source of truth so any device can
+// verify a certificate that was issued from any other device.
+
+import { supabase } from "@/integrations/supabase/client";
 
 export interface CertificateData {
   id: string;
@@ -19,8 +22,6 @@ export interface BlockchainRecord {
   timestamp: number;
   data: CertificateData;
 }
-
-const STORAGE_KEY = "certchain_ledger_v1";
 
 // SHA-256 hash via Web Crypto API
 export async function sha256(message: string): Promise<string> {
@@ -43,44 +44,97 @@ function randomTxHash(): string {
   return "0x" + Array.from(arr).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function getLedger(): BlockchainRecord[] {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-  } catch {
-    return [];
-  }
+// Map a DB row to the BlockchainRecord shape used across the UI.
+type CertRow = {
+  id: string;
+  name: string;
+  competition: string;
+  rank: string;
+  date: string;
+  issuer: string;
+  hash: string;
+  tx_hash: string;
+  block_number: number;
+  created_at: string;
+};
+
+function rowToRecord(row: CertRow): BlockchainRecord {
+  const ts = new Date(row.created_at).getTime();
+  return {
+    id: row.id,
+    hash: row.hash,
+    txHash: row.tx_hash,
+    blockNumber: Number(row.block_number),
+    timestamp: ts,
+    data: {
+      id: row.id,
+      name: row.name,
+      competition: row.competition,
+      rank: row.rank,
+      date: row.date,
+      issuer: row.issuer,
+      createdAt: ts,
+    },
+  };
 }
 
-function saveLedger(records: BlockchainRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+export async function getLedger(): Promise<BlockchainRecord[]> {
+  const { data, error } = await supabase
+    .from("certificates")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return (data as CertRow[]).map(rowToRecord);
 }
 
 export async function issueCertificate(
   data: Omit<CertificateData, "id" | "createdAt">
 ): Promise<BlockchainRecord> {
   const id = generateCertId();
-  const cert: CertificateData = { ...data, id, createdAt: Date.now() };
-  const payload = `${cert.id}|${cert.name}|${cert.competition}|${cert.rank}|${cert.date}|${cert.issuer}`;
+  const payload = `${id}|${data.name}|${data.competition}|${data.rank}|${data.date}|${data.issuer}`;
   const hash = await sha256(payload);
+  const txHash = randomTxHash();
 
-  const ledger = getLedger();
-  const record: BlockchainRecord = {
-    id,
-    hash,
-    txHash: randomTxHash(),
-    blockNumber: 18_000_000 + ledger.length + 1,
-    timestamp: Date.now(),
-    data: cert,
-  };
-  ledger.push(record);
-  saveLedger(ledger);
+  // Derive block number from current ledger size (deterministic enough for demo).
+  const { count } = await supabase
+    .from("certificates")
+    .select("*", { count: "exact", head: true });
+  const blockNumber = 18_000_000 + (count ?? 0) + 1;
+
+  const { data: inserted, error } = await supabase
+    .from("certificates")
+    .insert({
+      id,
+      name: data.name,
+      competition: data.competition,
+      rank: data.rank,
+      date: data.date,
+      issuer: data.issuer,
+      hash,
+      tx_hash: txHash,
+      block_number: blockNumber,
+    })
+    .select()
+    .single();
+
+  if (error || !inserted) throw new Error(error?.message || "Insert failed");
+
   // Simulasi delay konfirmasi block
-  await new Promise((r) => setTimeout(r, 900));
-  return record;
+  await new Promise((r) => setTimeout(r, 600));
+  return rowToRecord(inserted as CertRow);
 }
 
-export function getCertificateById(id: string): BlockchainRecord | undefined {
-  return getLedger().find((r) => r.id.toUpperCase() === id.toUpperCase().trim());
+export async function getCertificateById(
+  id: string
+): Promise<BlockchainRecord | undefined> {
+  const target = id.toUpperCase().trim();
+  const { data, error } = await supabase
+    .from("certificates")
+    .select("*")
+    .eq("id", target)
+    .maybeSingle();
+  if (error || !data) return undefined;
+  return rowToRecord(data as CertRow);
 }
 
 export async function verifyCertificate(id: string): Promise<{
@@ -88,7 +142,7 @@ export async function verifyCertificate(id: string): Promise<{
   record?: BlockchainRecord;
   computedHash?: string;
 }> {
-  const record = getCertificateById(id);
+  const record = await getCertificateById(id);
   if (!record) return { valid: false };
   const payload = `${record.data.id}|${record.data.name}|${record.data.competition}|${record.data.rank}|${record.data.date}|${record.data.issuer}`;
   const computed = await sha256(payload);
