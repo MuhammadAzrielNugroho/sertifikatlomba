@@ -149,7 +149,16 @@ const Admin = () => {
 const IssueForm = ({ onIssued }: { onIssued: (id: string) => void }) => {
   const [form, setForm] = useState({ name: "", competition: "", rank: "", date: "", issuer: "" });
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<BlockchainRecord | null>(null);
+  const [history, setHistory] = useState<BlockchainRecord[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const all = getLedger().slice().reverse();
+    setHistory(all);
+    if (all.length > 0) setSelectedId(all[0].id);
+  }, []);
+
+  const result = history.find((r) => r.id === selectedId) || null;
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [k]: e.target.value });
@@ -164,7 +173,10 @@ const IssueForm = ({ onIssued }: { onIssued: (id: string) => void }) => {
     setLoading(true);
     try {
       const rec = await issueCertificate(parsed.data as Required<typeof parsed.data>);
-      setResult(rec);
+      setHistory((prev) =>
+        prev.some((p) => p.id === rec.id) ? prev : [rec, ...prev]
+      );
+      setSelectedId(rec.id);
       toast.success("Sertifikat terbit & tercatat di blockchain", {
         description: `ID: ${rec.id}`,
       });
@@ -223,9 +235,16 @@ const IssueForm = ({ onIssued }: { onIssued: (id: string) => void }) => {
       </Card>
 
       <Card className="glass-card p-6 md:p-8 border-secondary/20">
-        <h2 className="text-xl font-semibold mb-1">Hasil Transaksi</h2>
+        <div className="flex items-center justify-between mb-1 gap-3 flex-wrap">
+          <h2 className="text-xl font-semibold">Hasil Transaksi</h2>
+          {history.length > 0 && (
+            <span className="text-xs font-mono text-muted-foreground">
+              {history.length} transaksi tersimpan
+            </span>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground mb-6">
-          Detail on-chain akan muncul di sini setelah penerbitan.
+          Riwayat penerbitan tersimpan permanen di ledger lokal.
         </p>
         {!result ? (
           <div className="border border-dashed border-border rounded-xl py-16 text-center text-sm text-muted-foreground">
@@ -237,9 +256,40 @@ const IssueForm = ({ onIssued }: { onIssued: (id: string) => void }) => {
             <Field label="Hash" value={result.hash} mono />
             <Field label="Tx Hash" value={result.txHash} mono />
             <Field label="Block Number" value={`#${result.blockNumber.toLocaleString()}`} />
-            <Button onClick={() => onIssued(result.id)} variant="outline" className="w-full mt-4 border-primary/40 hover:bg-primary/10">
+            <Button onClick={() => onIssued(result.id)} variant="outline" className="w-full mt-2 border-primary/40 hover:bg-primary/10">
               Lihat sertifikat <ExternalLink className="w-4 h-4 ml-2" />
             </Button>
+          </div>
+        )}
+
+        {history.length > 1 && (
+          <div className="mt-6 pt-5 border-t border-border space-y-2">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+              Riwayat Penerbitan
+            </div>
+            <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+              {history.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => setSelectedId(r.id)}
+                  className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
+                    r.id === selectedId
+                      ? "border-primary/50 bg-primary/10"
+                      : "border-border hover:bg-muted/30"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-mono text-xs text-primary">{r.id}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      #{r.blockNumber}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate mt-0.5">
+                    {r.data.name} — {r.data.competition}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </Card>
