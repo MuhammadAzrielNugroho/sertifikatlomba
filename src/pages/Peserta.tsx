@@ -32,7 +32,7 @@ const Peserta = () => {
       return;
     }
     setSearched(true);
-    const r = getCertificateById(target);
+    const r = await getCertificateById(target);
     if (!r) {
       setRecord(null);
       setQr("");

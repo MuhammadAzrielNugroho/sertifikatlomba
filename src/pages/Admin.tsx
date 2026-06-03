@@ -153,9 +153,11 @@ const IssueForm = ({ onIssued }: { onIssued: (id: string) => void }) => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
-    const all = getLedger().slice().reverse();
-    setHistory(all);
-    if (all.length > 0) setSelectedId(all[0].id);
+    (async () => {
+      const all = (await getLedger()).slice().reverse();
+      setHistory(all);
+      if (all.length > 0) setSelectedId(all[0].id);
+    })();
   }, []);
 
   const result = history.find((r) => r.id === selectedId) || null;
@@ -325,7 +327,9 @@ const Field = ({ label, value, mono, highlight }: { label: string; value: string
 
 const LedgerTable = () => {
   const [records, setRecords] = useState<BlockchainRecord[]>([]);
-  useEffect(() => setRecords(getLedger().slice().reverse()), []);
+  useEffect(() => {
+    (async () => setRecords((await getLedger()).slice().reverse()))();
+  }, []);
 
   return (
     <Card className="glass-card p-6 md:p-8">
