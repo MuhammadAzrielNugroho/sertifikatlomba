@@ -41,10 +41,6 @@ const Peserta = () => {
     }
     setRecord(r);
     setParams({ id: r.id });
-      return;
-    }
-    setRecord(r);
-    setParams({ id: r.id });
     const url = `${window.location.origin}/verify?id=${r.id}`;
     const dataUrl = await QRCode.toDataURL(url, {
       margin: 2,
