@@ -14,7 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      certificates: {
+        Row: {
+          block_number: number
+          competition: string
+          created_at: string
+          date: string
+          hash: string
+          id: string
+          issuer: string
+          name: string
+          rank: string
+          tx_hash: string
+        }
+        Insert: {
+          block_number: number
+          competition: string
+          created_at?: string
+          date: string
+          hash: string
+          id: string
+          issuer: string
+          name: string
+          rank: string
+          tx_hash: string
+        }
+        Update: {
+          block_number?: number
+          competition?: string
+          created_at?: string
+          date?: string
+          hash?: string
+          id?: string
+          issuer?: string
+          name?: string
+          rank?: string
+          tx_hash?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
