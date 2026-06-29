@@ -2,7 +2,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import { Shield, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { connectWallet, shortAddress } from "@/lib/wallet";
+import { connectWallet, getCurrentAccount, onAccountsChanged, shortAddress } from "@/lib/wallet";
 import { toast } from "sonner";
 
 const links = [
@@ -14,21 +14,57 @@ const links = [
 
 export const Navbar = () => {
   const [account, setAccount] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
-    if (window.ethereum?.selectedAddress) setAccount(window.ethereum.selectedAddress);
+    const saved = localStorage.getItem("wallet:address");
+    if (saved) setAccount(saved);
+    getCurrentAccount().then((addr) => {
+      if (addr) {
+        setAccount(addr);
+        localStorage.setItem("wallet:address", addr);
+      }
+    });
+    const off = onAccountsChanged((addr) => {
+      setAccount(addr);
+      if (addr) localStorage.setItem("wallet:address", addr);
+      else localStorage.removeItem("wallet:address");
+    });
+    return off;
   }, []);
 
   const handleConnect = async () => {
-    const addr = await connectWallet();
-    if (addr) {
-      setAccount(addr);
-      toast.success("Wallet terhubung", { description: shortAddress(addr) });
-    } else {
+    if (account) {
+      // Disconnect (local only — MetaMask has no programmatic disconnect)
+      setAccount(null);
+      localStorage.removeItem("wallet:address");
+      toast.success("Wallet diputuskan");
+      return;
+    }
+    setConnecting(true);
+    const res = await connectWallet();
+    setConnecting(false);
+    if ("address" in res) {
+      setAccount(res.address);
+      localStorage.setItem("wallet:address", res.address);
+      toast.success("Wallet terhubung", { description: shortAddress(res.address) });
+      return;
+    }
+    if (res.error === "no-provider") {
       toast.error("MetaMask tidak terdeteksi", {
-        description: "Install ekstensi MetaMask untuk terhubung. Aplikasi tetap berjalan tanpa wallet.",
+        description: "Install ekstensi MetaMask, lalu buka halaman ini di browser yang sama.",
+        action: {
+          label: "Install",
+          onClick: () => window.open("https://metamask.io/download/", "_blank"),
+        },
       });
+    } else if (res.error === "rejected") {
+      toast.error("Koneksi dibatalkan");
+    } else if (res.error === "pending") {
+      toast.message("Buka MetaMask", { description: "Permintaan koneksi sudah menunggu di ekstensi." });
+    } else {
+      toast.error("Gagal terhubung", { description: res.message });
     }
   };
 
@@ -65,7 +101,9 @@ export const Navbar = () => {
 
         <Button
           onClick={handleConnect}
+          disabled={connecting}
           variant={account ? "secondary" : "default"}
+          title={account ? "Klik untuk memutuskan" : "Hubungkan MetaMask"}
           className={
             account
               ? "font-mono text-xs"
@@ -73,7 +111,7 @@ export const Navbar = () => {
           }
         >
           <Wallet className="w-4 h-4 mr-2" />
-          {account ? shortAddress(account) : "Connect Wallet"}
+          {connecting ? "Menghubungkan…" : account ? shortAddress(account) : "Connect Wallet"}
         </Button>
       </nav>
       {/* Mobile nav */}
